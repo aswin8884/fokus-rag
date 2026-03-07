@@ -37,7 +37,7 @@ Fokus RAG is a production-ready Retrieval-Augmented Generation (RAG) application
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/fokus-rag.git
+git clone https://github.com/aswin8884/fokus-rag.git
 cd fokus-rag
 ```
 
@@ -72,6 +72,6 @@ Distributed under the MIT License.
 
 ## Author
 
-Name: Your Name  
-Portfolio: Your Portfolio Link  
-LinkedIn: Your LinkedIn Link
+Name: Aswin Pulickal  
+Portfolio: https://aswin-pulickal-portfolio-five-nu-f3guxz8oby.vercel.app
+LinkedIn: https://www.linkedin.com/in/aswin-pulickal-9aa4a42b0/
