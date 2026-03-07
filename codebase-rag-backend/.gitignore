@@ -1,0 +1,13 @@
+# Security
+.env
+
+# Virtual Environments
+venv/
+env/
+
+# Database (Don't push your massive vector database to GitHub!)
+chroma_db/
+
+# Python Cache
+__pycache__/
+*.pyc

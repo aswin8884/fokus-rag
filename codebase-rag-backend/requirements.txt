@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+python-dotenv
+python-multipart
+langchain-cohere
+langchain-chroma
+langchain-community
+pypdf
