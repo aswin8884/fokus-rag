@@ -37,16 +37,22 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     question: str
     session_id: str
+    lang: str = "en"
 
 chat_histories: Dict[str, List] = {}
 
 embeddings = CohereEmbeddings(model="embed-multilingual-v3.0", cohere_api_key=COHERE_KEY)
 llm = ChatCohere(model="command-r7b-12-2024", temperature=0.0, cohere_api_key=COHERE_KEY)
-
 compressor = CohereRerank(model="rerank-multilingual-v3.0", top_n=10, cohere_api_key=COHERE_KEY)
 
 system_template = """You are a highly precise, multilingual AI assistant. 
-You have NO outside knowledge. You rely strictly on the provided documents."""
+You have NO outside knowledge. You rely strictly on the provided documents.
+
+★★★ SUPREME DIRECTIVE: LANGUAGE OVERRIDE ★★★
+You must ALWAYS respond in the EXACT language the user used in their question. 
+- If the User Question is written in English, you MUST respond in English, even if all the provided documents are in German. 
+- If the User Question is written in German, you MUST respond in German.
+- NEVER let the document's language override the user's language."""
 
 human_template = """Context from documents:
 ====================
@@ -56,18 +62,30 @@ human_template = """Context from documents:
 User Question: {input}
 
 CRITICAL INSTRUCTIONS: 
-1. Answer the question relying SOLELY on the Context above.
-2. If the user asks "what is [term]" or asks about an acronym, and a strict definition is not found in the text, you must instead summarize everything the Context says ABOUT that term.
-3. ONLY if the term is completely unmentioned in the Context, output this exact concept, translated into the user's language: "Based on the provided documents, I do not know."
-4. MIRROR THE LANGUAGE: If they ask in English, reply in English. If they ask in German, reply in German.
+1. Answer relying SOLELY on the Context above.
+2. If the answer is completely unmentioned in the Context, say exactly: "Based on the provided documents, I do not know." (Translate this to the requested language).
+3. FORMATTING: Structure your answer beautifully using paragraphs, bullet points, and bold text.
+4. MANDATORY LANGUAGE OVERRIDE: The user's interface is set to {language}. You MUST translate your final answer into {language}, regardless of the language of the Context or the Question.
 
-Answer:"""
+Answer strictly in {language}:"""
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_template),
     MessagesPlaceholder(variable_name="chat_history"),
     ("human", human_template),
 ])
+
+# Standalone Question Generator
+rephrase_prompt = ChatPromptTemplate.from_messages([
+    ("system", """Given the chat history and a follow-up question, rephrase the follow-up into a standalone search query. 
+    CRITICAL: If the follow-up question introduces a NEW topic (like 'address' or 'contact') that is unrelated to the previous conversation, 
+    DO NOT include the previous topic in the rephrased query. 
+    Just return the follow-up as a clear, standalone search term. 
+    Do NOT answer the question, just rephrase it."""),
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("human", "{input}")
+])
+rephrase_chain = rephrase_prompt | llm | StrOutputParser()
 
 def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
@@ -84,53 +102,86 @@ def get_session_chain(session_id: str):
     base_retriever = vectorstore.as_retriever(search_kwargs={"k": 30})
     retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=base_retriever)
     
-    rag_chain = (
-        {
-            "context": itemgetter("input") | retriever | format_docs, 
-            "chat_history": itemgetter("chat_history"),
-            "input": itemgetter("input")
-        }
-        | prompt | llm | StrOutputParser()
-    )
-    return vectorstore, retriever, rag_chain
+    final_chain = prompt | llm | StrOutputParser()
+    
+    return vectorstore, retriever, final_chain
 
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
+    print("\n" + "="*50)
+    print("🚀 NEW CHAT REQUEST RECEIVED")
+    print(f"📝 Question: {request.question}")
+    print(f"🌐 Frontend Toggle Received: '{request.lang}'")
+    
     session_id = request.session_id
+    # Determine the target language based on the toggle
+    target_language = "German" if request.lang == "de" else "English"
+    print(f"🎯 Forcing AI to output in: {target_language}")
     
     if session_id not in chat_histories:
         chat_histories[session_id] = []
         
-    _, retriever, rag_chain = get_session_chain(session_id)
+    vectorstore, retriever, final_chain = get_session_chain(session_id)
+    current_history = chat_histories[session_id]
     
-    retrieved_docs = retriever.invoke(request.question)
+    # 1. Rephrase for Chat History
+    search_query = request.question
+    if current_history:
+        search_query = rephrase_chain.invoke({
+            "chat_history": current_history,
+            "input": request.question
+        })
+    
+    # 2. Retrieve Documents
+    retrieved_docs = retriever.invoke(search_query)
 
-    # print(f"\n AI SEARCHED 30 CHUNKS AND KEPT {len(retrieved_docs)} FOR QUESTION: '{request.question}'")
-    for i, doc in enumerate(retrieved_docs):
-        print(f"--- CHUNK {i+1} ---")
-        print(doc.page_content[:200] + "...\n") 
-    
     sources = []
     for doc in retrieved_docs:
         path = doc.metadata.get("source", "Unknown")
         filename = os.path.basename(path)
         if filename not in sources:
             sources.append(filename)
+            
+    # 3. Generate the Answer (FIXED LINE 144 BELOW)
+    print("⏳ Generating raw answer from PDF...")
+    try:
+        raw_answer = final_chain.invoke({
+            "context": format_docs(retrieved_docs),
+            "input": request.question, 
+            "chat_history": current_history,
+            "language": target_language  # ✅ FIXED: Added missing variable
+        })
+        print(f"🤖 RAW AI ANSWER: {raw_answer[:100]}...")
+        
+        # 4. Final Translation Guardrail
+        print(f"⏳ Passing to Translation Guardrail ({target_language})...")
+        translator_prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a professional translator. You must perfectly translate the given text into {target_language}. Keep all Markdown formatting exactly as it is. Return ONLY the translated text, no other commentary."),
+            ("human", "{text}")
+        ])
+        translator_chain = translator_prompt | llm | StrOutputParser()
+        
+        final_answer = translator_chain.invoke({
+            "target_language": target_language,
+            "text": raw_answer
+        })
+        
+    except Exception as e:
+        print(f"❌ CHAIN FAILED: {str(e)}")
+        return {"answer": "Error generating response. Please check terminal.", "sources": []}
+
+    print(f"✨ TRANSLATED ANSWER: {final_answer[:100]}...")
+    print("="*50 + "\n")
     
-    answer = rag_chain.invoke({
-        "input": request.question,
-        "chat_history": chat_histories[session_id]
-    })
-    
+    # Update History
     chat_histories[session_id].append(HumanMessage(content=request.question))
-    chat_histories[session_id].append(AIMessage(content=answer))
+    chat_histories[session_id].append(AIMessage(content=final_answer))
     
     if len(chat_histories[session_id]) > 10:
         chat_histories[session_id] = chat_histories[session_id][-10:]
     
-    return {"answer": answer, "sources": sources}
-
+    return {"answer": final_answer, "sources": sources}
 
 @app.post("/upload")
 async def upload_file(session_id: str, file: UploadFile = File(...)):

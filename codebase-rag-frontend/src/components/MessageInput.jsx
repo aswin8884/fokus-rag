@@ -23,7 +23,6 @@ const handleFileSelect = async (e) => {
     formData.append('file', file);
 
     try {
-      // 🔥 NEW: Dynamically grab the API URL here!
       const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
       const response = await fetch(`${API_URL}/upload?session_id=${sessionId}`, {
@@ -57,7 +56,6 @@ const handleFileSelect = async (e) => {
       setText('');
     }
     
-    // Clear the visual file chip after sending, just like ChatGPT
     if (uploadedFile?.status === 'success') {
       setUploadedFile(null);
     }

@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 @variant dark (&:where(.dark, .dark *));
 
 html {
@@ -6,4 +9,31 @@ html {
 }
 body {
   @apply antialiased text-zinc-900 bg-white dark:text-zinc-100 dark:bg-zinc-950;
+}
+/* 🌟 Premium Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(161, 161, 170, 0.3);
+  border-radius: 20px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background-color: rgba(63, 63, 70, 0.5);
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(161, 161, 170, 0.6);
+}
+
+/* 🌟 Smooth Message Reveal Animation */
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-message {
+  animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
