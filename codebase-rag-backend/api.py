@@ -109,15 +109,11 @@ def get_session_chain(session_id: str):
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
-    print("\n" + "="*50)
-    print("🚀 NEW CHAT REQUEST RECEIVED")
-    print(f"📝 Question: {request.question}")
-    print(f"🌐 Frontend Toggle Received: '{request.lang}'")
     
     session_id = request.session_id
     # Determine the target language based on the toggle
     target_language = "German" if request.lang == "de" else "English"
-    print(f"🎯 Forcing AI to output in: {target_language}")
+    print(f"Forcing AI to output in: {target_language}")
     
     if session_id not in chat_histories:
         chat_histories[session_id] = []
@@ -150,7 +146,7 @@ async def chat_endpoint(request: ChatRequest):
             "context": format_docs(retrieved_docs),
             "input": request.question, 
             "chat_history": current_history,
-            "language": target_language  # ✅ FIXED: Added missing variable
+            "language": target_language
         })
         print(f"🤖 RAW AI ANSWER: {raw_answer[:100]}...")
         
