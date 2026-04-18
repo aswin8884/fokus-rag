@@ -52,6 +52,8 @@ pip install -r requirements.txt
 COHERE_API_KEY=your_api_key
 
 python api.py
+
+run : uvicorn api:app --reload
 ```
 
 ### 3. Frontend Setup
@@ -63,15 +65,12 @@ npm install
 VITE_CLERK_PUBLISHABLE_KEY=your_key
 VITE_API_URL=http://localhost:8000
 
-npm run dev
+run : npm run dev
 ```
 
-## License
-
-Distributed under the MIT License.
 
 ## Author
 
 Name: Aswin Pulickal  
-Portfolio: https://aswin-pulickal-portfolio-five-nu-f3guxz8oby.vercel.app
-LinkedIn: https://www.linkedin.com/in/aswin-pulickal-9aa4a42b0/
+Portfolio: https://aswin-pulickal-portfolio.vercel.app/
+LinkedIn: https://www.linkedin.com/in/aswin-pulickal/
