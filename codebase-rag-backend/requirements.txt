@@ -6,3 +6,5 @@ langchain-cohere
 langchain-chroma
 langchain-community
 pypdf
+PyJWT
+requests

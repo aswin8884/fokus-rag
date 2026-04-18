@@ -1,0 +1,55 @@
+version: "3.8"
+
+services:
+  # Backend FastAPI service
+  backend:
+    build:
+      context: ./codebase-rag-backend
+      dockerfile: Dockerfile
+    container_name: fokus-rag-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - COHERE_API_KEY=${COHERE_API_KEY}
+      - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
+    volumes:
+      - ./codebase-rag-backend/chroma_db:/app/chroma_db
+      - ./codebase-rag-backend/data:/app/data
+    command: uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - fokus-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend React service
+  frontend:
+    build:
+      context: ./codebase-rag-frontend
+      dockerfile: Dockerfile.dev
+    container_name: fokus-rag-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY}
+      - VITE_API_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./codebase-rag-frontend/src:/app/src
+      - ./codebase-rag-frontend/public:/app/public
+      - /app/node_modules
+    networks:
+      - fokus-network
+
+networks:
+  fokus-network:
+    driver: bridge
+
+volumes:
+  chroma_db:
+  data:

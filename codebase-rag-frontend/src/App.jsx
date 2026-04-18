@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Sun, Moon, CheckCircle2, AlertCircle, Globe } from "lucide-react";
-import { Show, SignIn, UserButton } from "@clerk/react";
+import { Show, SignIn, UserButton, useUser, useAuth } from "@clerk/react";
 import Sidebar from "./components/Sidebar";
 import MessageList from "./components/MessageList";
 import MessageInput from "./components/MessageInput";
@@ -36,23 +36,46 @@ const translations = {
 };
 
 function App() {
-  const [sessionId, setSessionId] = useState(
-    () => localStorage.getItem("rag_session_id") || generateSessionId(),
-  );
+  const { user, isLoaded } = useUser();
+  const { getToken } = useAuth();
+  const [authToken, setAuthToken] = useState(null);
+
+  // Reset session and chat data when user changes
+  const [sessionId, setSessionId] = useState(() => generateSessionId());
   const [lang, setLang] = useState(
     () => localStorage.getItem("rag_lang") || "en",
   );
   const t = translations[lang];
 
-  const [chatSessions, setChatSessions] = useState(() => {
-    const savedSessions = localStorage.getItem("rag_sessions_list");
-    return savedSessions ? JSON.parse(savedSessions) : [];
-  });
+  const [chatSessions, setChatSessions] = useState([]);
+  const [messages, setMessages] = useState([]);
 
-  const [messages, setMessages] = useState(() => {
-    const savedChat = localStorage.getItem(`rag_chat_${sessionId}`);
-    return savedChat ? JSON.parse(savedChat) : [];
-  });
+  // Get Clerk auth token for API requests
+  useEffect(() => {
+    if (user && isLoaded) {
+      getToken().then((token) => setAuthToken(token));
+    }
+  }, [user, isLoaded]);
+
+  // Reset all chat data when user changes (fixes the security issue)
+  useEffect(() => {
+    if (user && isLoaded) {
+      // Generate new session for this user
+      const newSessionId = generateSessionId();
+      setSessionId(newSessionId);
+      // Clear all previous chat data - start fresh for new user
+      setChatSessions([]);
+      setMessages([]);
+      // Also clear localStorage chat data to prevent data leakage
+      localStorage.removeItem("rag_sessions_list");
+      // Clear all individual chat history entries
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("rag_chat_")) {
+          localStorage.removeItem(key);
+        }
+      });
+    }
+  }, [user?.id, isLoaded]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -75,7 +98,7 @@ function App() {
   }, [lang]);
 
   useEffect(() => {
-    localStorage.setItem("rag_session_id", sessionId);
+    // Save messages to localStorage for this session (user-scoped)
     localStorage.setItem(`rag_chat_${sessionId}`, JSON.stringify(messages));
 
     if (messages.length > 0) {
@@ -189,33 +212,115 @@ function App() {
   };
 
   const handleSendMessage = async (text) => {
+    if (!user || !authToken) {
+      showToast(t.connFail, "error");
+      return;
+    }
+
     const userMessage = { role: "user", content: text };
     setMessages((prev) => [...prev, userMessage]);
+
+    // Create assistant message placeholder for streaming
+    const assistantMessage = { role: "assistant", content: "", sources: [] };
+    setMessages((prev) => [...prev, assistantMessage]);
     setIsLoading(true);
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
       const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
         body: JSON.stringify({
           question: text,
           session_id: sessionId,
           lang: lang,
+          user_id: user.id,
         }),
       });
 
-      if (!response.ok) throw new Error("Network error");
-      const data = await response.json();
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.answer, sources: data.sources },
-      ]);
+      if (!response.ok) {
+        throw new Error("Network error");
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+
+      if (contentType.includes("application/json")) {
+        // Non-streaming backend: plain JSON response {"answer": "...", "sources": [...]}
+        const data = await response.json();
+        setMessages((prev) => {
+          const idx = prev.length - 1;
+          if (prev[idx]?.role !== "assistant") return prev;
+          return [
+            ...prev.slice(0, idx),
+            { ...prev[idx], content: data.answer || t.networkErr, sources: data.sources || [] },
+          ];
+        });
+      } else {
+        // Streaming backend: NDJSON lines of {"type":"chunk","content":"..."} etc.
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+
+          for (let i = 0; i < lines.length - 1; i++) {
+            try {
+              const json = JSON.parse(lines[i]);
+              if (json.type === "chunk") {
+                setMessages((prev) => {
+                  const idx = prev.length - 1;
+                  if (prev[idx]?.role !== "assistant") return prev;
+                  return [
+                    ...prev.slice(0, idx),
+                    { ...prev[idx], content: prev[idx].content + json.content },
+                  ];
+                });
+              } else if (json.type === "complete") {
+                setMessages((prev) => {
+                  const idx = prev.length - 1;
+                  if (prev[idx]?.role !== "assistant") return prev;
+                  return [
+                    ...prev.slice(0, idx),
+                    { ...prev[idx], sources: json.sources || [] },
+                  ];
+                });
+              } else if (json.type === "error") {
+                setMessages((prev) => {
+                  const idx = prev.length - 1;
+                  return [
+                    ...prev.slice(0, idx),
+                    { role: "assistant", content: json.content || t.networkErr, sources: [] },
+                  ];
+                });
+                showToast(t.networkErr, "error");
+              }
+            } catch (e) {
+              if (lines[i].trim()) console.error("Parse error:", e, lines[i]);
+            }
+          }
+
+          buffer = lines[lines.length - 1];
+        }
+      }
     } catch (error) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: t.connFail },
-      ]);
+      console.error("Chat error:", error);
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          role: "assistant",
+          content: t.connFail,
+          sources: [],
+        };
+        return updated;
+      });
       showToast(t.networkErr, "error");
     } finally {
       setIsLoading(false);
@@ -308,6 +413,8 @@ function App() {
                     sessionId={sessionId}
                     showToast={showToast}
                     lang={lang}
+                    authToken={authToken}
+                    userId={user?.id}
                   />
                   <div className="text-[11px] text-center text-zinc-500 dark:text-zinc-500 pb-4 pt-1 px-4">
                     {lang === "de"

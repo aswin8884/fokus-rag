@@ -1,3 +1,88 @@
+# Fokus RAG Frontend
+
+React.js frontend for the Fokus RAG document assistant. Built with Vite, Tailwind CSS, and Clerk authentication.
+
+## Tech Stack
+
+- **React 18** - Component library
+- **Vite** - Build tool (lightning-fast dev server)
+- **Tailwind CSS** - Styling
+- **Clerk** - Authentication
+- **Lucide Icons** - UI icons
+
+## Quick Start
+
+```bash
+npm install
+npm run dev
+```
+
+Open http://localhost:5173
+
+## Features
+
+- Real-time streaming chat
+- PDF document upload
+- Language toggle (English/German)
+- Session management
+- User authentication
+
+## Environment Variables
+
+Create `.env.local`:
+
+```
+VITE_CLERK_PUBLISHABLE_KEY=your_key
+VITE_API_URL=http://localhost:8000
+```
+
+## Streaming Chat
+
+The frontend handles streaming responses from the backend:
+
+- Creates empty message placeholder
+- Opens ReadableStream from response
+- Appends characters to message in real-time
+- Updates sources on completion
+
+See [STREAMING_IMPLEMENTATION_GUIDE.md](../STREAMING_IMPLEMENTATION_GUIDE.md) for technical details.
+
+## Project Structure
+
+```
+src/
+├── App.jsx              # Main component + streaming handler
+├── components/          # React components
+│   ├── MessageInput.jsx
+│   ├── MessageList.jsx
+│   ├── Sidebar.jsx
+│   ├── SettingsHub.jsx
+│   └── DocumentHub.jsx
+├── utils/               # Helper functions
+│   └── streamingHandler.js
+├── App.css
+├── index.css
+└── main.jsx
+```
+
+## Building
+
+```bash
+npm run build
+```
+
+Outputs to `dist/` directory, ready for deployment to Vercel.
+
+## Deployment
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel
+```
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
