@@ -1,76 +1,94 @@
-# Fokus RAG | Enterprise Multilingual Document Assistant
+# Fokus RAG — Multilingual Document Q&A
 
-Fokus RAG is a production-ready Retrieval-Augmented Generation (RAG) application designed to bridge the gap between English technical documentation and multilingual teams. It allows users to securely upload private PDFs and extract insights using natural language while ensuring high precision and zero hallucination.
+Ask questions about your PDFs and get grounded, source-based answers.
+Fokus RAG is a full-stack **Retrieval-Augmented Generation (RAG)** application:
+upload documents, and the system retrieves the most relevant passages and uses a
+large language model to answer — in multiple languages.
 
-## Key Features
+**Live demo:** https://fokus-rag.vercel.app/
 
-- Multilingual Intelligence: Powered by Cohere Command-R. The system ingests English documents and responds in German or English.
-- Zero-Hallucination Engineering: Strict prompt grounding ensures the AI refuses to answer if the information is not present in the source document.
-- Two-Stage Retrieval: Uses vector embeddings for document search and a secondary processing layer for accurate information extraction.
-- Modern Tech Stack: FastAPI backend with a responsive React (Vite) frontend.
-- Secure Authentication: Clerk-based authentication for protected user sessions.
+<!-- Replace the line below with your screenshot once uploaded -->
+![Fokus RAG demo](assets/demo.png)
 
-## Technical Stack
+---
 
-### Backend
-- Language: Python 3.11
-- Framework: FastAPI
-- Orchestration: LangChain
-- LLM: Cohere Command-R
-- Vector Database: ChromaDB
-- Deployment: Docker (Render)
+## What it does
 
-### Frontend
-- Library: React.js (Vite)
-- Styling: Tailwind CSS and Lucide Icons
-- Authentication: Clerk
-- Deployment: Vercel
+- **Upload PDFs** and have them automatically chunked and embedded
+- **Ask questions in natural language** — answers are grounded in the document,
+  not hallucinated
+- **Multilingual** — works across documents and questions in different languages
+- **Source-aware** — answers are built from retrieved context, reducing made-up
+  responses
 
-## Architecture
+---
 
-1. Ingestion: Uploaded PDFs are processed and split into optimized semantic chunks.
-2. Embedding: Text chunks are converted into vector embeddings.
-3. Vector Search: ChromaDB retrieves relevant document context based on the user query.
-4. Generation: The LLM generates an answer strictly grounded on the retrieved context.
+## How it works
 
-## Local Setup
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/aswin8884/fokus-rag.git
-cd fokus-rag
+```
+PDF upload
+   │
+   ▼
+Chunking ──► Embeddings ──► Vector store (ChromaDB)
+                                   │
+User question ──► Embed ──► Similarity search ──► Retrieved context
+                                                        │
+                                                        ▼
+                                          Reranking ──► LLM (Cohere) ──► Answer
 ```
 
-### 2. Backend Setup
+The pipeline handles document ingestion, embedding generation, vector similarity
+search, contextual **reranking** to surface the most relevant chunks, and prompt
+construction so the LLM answers only from retrieved context.
+
+---
+
+## Tech stack
+
+**Backend:** Python · FastAPI · LangChain · ChromaDB (vector database) ·
+Cohere Command-R
+**Frontend:** React · Vite
+**Deployment:** Docker · Render
+
+---
+
+## Key engineering decisions
+
+- **Chunking strategy** tuned to balance retrieval precision against context size
+- **Contextual reranking** after vector search to improve answer relevance
+- **Grounded prompting** so the model answers from retrieved passages rather than
+  its own priors — the core mechanism for reducing hallucinations
+- **Async FastAPI** backend to keep uploads and queries responsive
+
+---
+
+## Running locally
+
 ```bash
-cd codebase-rag-backend
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+# Backend
+cd backend
 pip install -r requirements.txt
+uvicorn main:app --reload
 
-# Create a .env file and add
-COHERE_API_KEY=your_api_key
-
-python api.py
-
-run : uvicorn api:app --reload
-```
-
-### 3. Frontend Setup
-```bash
-cd codebase-rag-frontend
+# Frontend
+cd frontend
 npm install
-
-# Create a .env file and add
-VITE_CLERK_PUBLISHABLE_KEY=your_key
-VITE_API_URL=http://localhost:8000
-
-run : npm run dev
+npm run dev
 ```
 
+Add your Cohere API key to a `.env` file:
 
-## Author
+```
+COHERE_API_KEY=your_key_here
+```
 
-Name: Aswin Pulickal  
-Portfolio: https://aswin-pulickal-portfolio.vercel.app/
-LinkedIn: https://www.linkedin.com/in/aswin-pulickal/
+---
+
+## About
+
+Built as a self-directed project to understand RAG systems end-to-end — from
+document ingestion and embeddings through retrieval, reranking, and grounded
+generation. Developed alongside my M.Sc. in Computer Science (E-Government) at the
+University of Koblenz.
+
+**Author:** Aswin Pulickal Binduraj · [LinkedIn](https://linkedin.com/in/aswin-pulickal) · [GitHub](https://github.com/aswin8884)
