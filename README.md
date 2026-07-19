@@ -7,7 +7,6 @@ large language model to answer — in multiple languages.
 
 **Live demo:** https://fokus-rag.vercel.app/
 
-<!-- Replace the line below with your screenshot once uploaded -->
 ![Fokus RAG demo](images/fokus_rag_img1.png)
 ![Fokus RAG demo](images/fokus_rag_img2.png)
 ![Fokus RAG demo](images/fokus_rag_img3.png)
